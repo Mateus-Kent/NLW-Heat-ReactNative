@@ -1,31 +1,56 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { ScrollView } from "react-native";
+import { io } from "socket.io-client";
 
-import { Message } from "../Message";
+import { Message, MessageProps } from "../Message";
+
+import { api } from "../../services/api";
+import { MESSAGES_EXAMPLE } from "../../utils/messages"
 
 import { styles } from "./styles";
 
-export function MessageList() {
-  const message = {
-    id: '1',
-    text: 'mensagem',
-    user: {
-      name: 'Carla',
-      avatar_url: 'https://images.unsplash.com/photo-1510227272981-87123e259b17?ixlib=rb-0.3.5&q=80&fm=jpg&crop=faces&fit=crop&h=200&w=200&s=3759e09a5b9fbe53088b23c615b6312e',
-    }
-  }
+let messagesQueue: MessageProps[] = MESSAGES_EXAMPLE;
 
+const socket = io(String(api.defaults.baseURL));
+socket.on("new_message", (newMessage) => {
+  messagesQueue.push(newMessage);
+});
+
+export function MessageList() {
+  const [currentMessages, setCurrentMessages] = useState<MessageProps[]>([]);
+
+  useEffect(() => {
+    async function fetchMessages() {
+      const messagesResponse = await api.get<MessageProps[]>("/messages/last3");
+      setCurrentMessages(messagesResponse.data);
+    }
+    fetchMessages();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (messagesQueue.length > 0) {
+        setCurrentMessages((prevState) => [
+          messagesQueue[0],
+          prevState[0],
+          prevState[1],
+        ]);
+        messagesQueue.shift();
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <ScrollView 
-    style={styles.container}
-    contentContainerStyle={styles.content}
-    keyboardShouldPersistTaps="never"
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="never"
     >
-      <Message data={message}/>
-      <Message data={message}/>
-      <Message data={message}/>
-      <Message data={message}/>
+      {currentMessages?.map((message) => (
+        <Message key={message.id} data={message} />
+      ))}
     </ScrollView>
   );
 }
